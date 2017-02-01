@@ -314,7 +314,7 @@ def skip_sliding_windows(image, left_fit, right_fit, display=False):
         plt.plot(fit_rightx, fity, color='yellow')
         plt.xlim(0, 1280)
         plt.ylim(720, 0)
-    return True
+    return left_fit, right_fit, leftx, lefty, rightx, righty
 
 
 def draw_lane(image_undistort, image_warped, left_fit, right_fit, Minv):
@@ -348,7 +348,7 @@ def draw_lane(image_undistort, image_warped, left_fit, right_fit, Minv):
 
 # Define a class to receive the characteristics of each line detection
 class Line():
-    def __init__(self, detected, current_fit, allx, ally):
+    def __init__(self, detected):
         # was the line detected in the last iteration?
         self.detected = False  
         # x values of the last n fits of the line
@@ -369,10 +369,15 @@ class Line():
         self.allx = None  
         #y values for detected line pixels
         self.ally = None
-
-    def radius_of_curvature(self):
+     
+    def check(self):
+        
+        return self.detected
+            
+    
+    def calculate_radius_of_curvature(self):
         # Generate some fake data to represent lane-line pixels
-        fity = np.linspace(0, 719, num-720) # to cover same y-range as image
+        fity = np.linspace(0, 719, num=720) # to cover same y-range as image
 
         # Define y-value where we want radius of curvature
         # I'll choose the maximum y-value, corresponding to the bottom of the image     
@@ -387,7 +392,7 @@ class Line():
         xm_per_pix = 3.7/700 # meters per pixel in x dimension
         
         # Fit new polynomials to x,y in world space
-        fit_cr = np.polyfit(fity*ym_per_pix, self.allx*xm_per_pix, 2)
+        fit_cr = np.polyfit(self.ally*ym_per_pix, self.allx*xm_per_pix, 2)
 #        right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
         # Calculate the new radii of curvature
         self.radius_of_curvature = ((1 + (2*fit_cr[0]*y_eval*ym_per_pix + fit_cr[1])**2)**1.5) / np.absolute(2*fit_cr[0])
@@ -395,11 +400,11 @@ class Line():
         # Now our radius of curvature is in meters
 #        print(left_curverad, 'm', right_curverad, 'm')
 
-        
         return self.radius_of_curvature
 
 
-def process_image(image, display=False): 
+
+def process_image(image, left_lane=left_lane, right_lane=right_lane, display=False): 
     # undistort image
     image_undistort = undistort(image, mtx=mtx, dist=dist)
     
@@ -409,13 +414,67 @@ def process_image(image, display=False):
     # transfer image to a bird eye view
     image_warped, M, Minv = perspective_transform(image_threshold)
     
-    # define left and right lane substances
-    left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped)
+    if left_lane.detected==True and right_lane.detected==True:
+        left_fit, right_fit, leftx, lefty, rightx, righty = skip_sliding_windows(image_warped, left_lane.current_fit, right_lane.current_fit, display=False)
+        left_lane.allx = leftx
+        left_lane.ally = lefty
+        left_lane.calculate_radius_of_curvature()
+        left_lane.current_fit = left_fit
     
-    left_lane = Line(False, left_fit, leftx, lefty)
-    right_lane = Line(False, right_fit, rightx, righty)
+        
+        right_lane.allx = rightx
+        right_lane.ally = righty
+        right_lane.calculate_radius_of_curvature()
+        right_lane.current_fit = right_fit
+        
+    else:
+        # current lane lines
+        left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped)
+        left_lane.allx = leftx
+        left_lane.ally = lefty
+        left_lane.calculate_radius_of_curvature()
+        left_lane.current_fit = left_fit
+    
+        
+        right_lane.allx = rightx
+        right_lane.ally = righty
+        right_lane.calculate_radius_of_curvature()
+        right_lane.current_fit = right_fit
+
+    # check if detected lines are real-thing
+    curv_diff = abs(left_lane.radius_of_curvature - right_lane.radius_of_curvature)
+    
+    if (curv_diff >40) and (curv_diff<60): # normal curv_diff is around 50m
+        if left_lane.allx.shape[0]>100:    
+            left_lane.detected=True
+        else:
+            left_lane.detected=False
             
+        if right_lane.allx.shape[0]>100:
+            right_lane.detected=True
+        else:
+            right_lane.detected=False
+    else:
+            left_lane.detected=False
+            right_lane.detected=False
+    
+
+#    print(abs(left_lane.radius_of_curvature - right_lane.radius_of_curvature))
+#    print(abs(left_lane.current_fit[0] - right_lane.current_fit[0]))
+#    print(left_lane.current_fit)
+#    print(right_lane.current_fit)
+#    print(left_fit.shape, leftx.shape, lefty.shape, rightx.shape, righty.shape)
+    
+    # draw the lines back down onto the road
     result = draw_lane(image_undistort,image_warped, left_fit, right_fit, Minv)
+
+    
+    left_curvature = left_lane.radius_of_curvature
+    right_curvature = right_lane.radius_of_curvature
+    # put text on video
+    cv2.putText(result, 'Left radius of curvature = %.2f m'%(left_curvature),(50,50), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(result, 'Right radius of curvature = %.2f m'%(right_curvature), (50,80), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+#    cv2.putText(result, 'Vehicle position: %.2f m)
     
     if display==True:
         fig = plt.figure(figsize=(16,9))
@@ -432,14 +491,19 @@ if __name__ == "__main__":
     # Calibrate the camera
     print("Calibrating camera")
     mtx, dist = calibrate_camera('camera_cal/')
+    
+    # define left and right lane clas substances
+    left_lane = Line(False)
+    right_lane = Line(False)
+            
 
-    test_mode = 'image'
+    test_mode = 'video'
     
     if test_mode == 'image':
         # Test Images
-        image = mpimg.imread('test_images/test1.jpg')
+        image = mpimg.imread('test_images/test3.jpg')
         print("image shape is:", image.shape)
-        result = process_image(image, display=True)
+        result = process_image(image, left_lane=left_lane, right_lane=right_lane, display=True)
 
         
     else:
