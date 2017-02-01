@@ -57,22 +57,16 @@ def undistort(img, mtx=None, dist=None):
     return img_undistort
 
 def perspective_transform(image, src_in = None, dst_in = None, display=False):
-    img_size = image.shape
-    if src_in is None:
-        src = np.array([[585. /1280.*img_size[1], 455./720.*img_size[0]],
-                        [710. /1280.*img_size[1], 455./720.*img_size[0]],
-                        [1130./1280.*img_size[1], 710./720.*img_size[0]],
-                        [190. /1280.*img_size[1], 710./720.*img_size[0]]], np.float32)
-    else:
-        src = src_in
+    src = np.array([[585., 455.],
+                    [710., 455.],
+                    [1130., 710.],
+                    [190., 710.]], np.float32)
 
-    if dst_in is None:
-        dst = np.array([[300. /1280.*img_size[1], 100./720.*img_size[0]],
-                        [1000./1280.*img_size[1], 100./720.*img_size[0]],
-                        [1000./1280.*img_size[1], 720./720.*img_size[0]],
-                        [300. /1280.*img_size[1], 720./720.*img_size[0]]], np.float32)
-    else:
-        dst = dst_in
+    dst = np.array([[300., 100.],
+                    [1000., 100.],
+                    [1000., 720.],
+                    [300., 720.]], np.float32)
+
 
     M = cv2.getPerspectiveTransform(src, dst)
     Minv = cv2.getPerspectiveTransform(dst, src)
@@ -270,7 +264,7 @@ def skip_sliding_windows(image, left_fit, right_fit, display=False):
     nonzero = image.nonzero()
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
-    margin = 100
+    margin = 60
     left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
     right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
     
@@ -345,7 +339,6 @@ def draw_lane(image_undistort, image_warped, left_fit, right_fit, Minv):
     return result
 
 
-
 # Define a class to receive the characteristics of each line detection
 class Line():
     def __init__(self, detected):
@@ -369,10 +362,17 @@ class Line():
         self.allx = None  
         #y values for detected line pixels
         self.ally = None
+ 
      
-    def check(self):
-        
-        return self.detected
+#    def best(self):
+#        if count < 5:
+#            best_fit += self.current_fit
+#            count += 1
+#        elif count=5
+#            self.best_fit =best_fit/5
+#            count = 0
+#            best_fit = np.array([[0,0,0])
+#        return self.best_fit
             
     
     def calculate_radius_of_curvature(self):
@@ -404,7 +404,7 @@ class Line():
 
 
 
-def process_image(image, left_lane=left_lane, right_lane=right_lane, display=False): 
+def process_image(image, display=False): 
     # undistort image
     image_undistort = undistort(image, mtx=mtx, dist=dist)
     
@@ -415,42 +415,57 @@ def process_image(image, left_lane=left_lane, right_lane=right_lane, display=Fal
     image_warped, M, Minv = perspective_transform(image_threshold)
     
     if left_lane.detected==True and right_lane.detected==True:
+        # lane lines detected
         left_fit, right_fit, leftx, lefty, rightx, righty = skip_sliding_windows(image_warped, left_lane.current_fit, right_lane.current_fit, display=False)
+        left_lane.recent_xfitted = left_lane.allx
         left_lane.allx = leftx
         left_lane.ally = lefty
         left_lane.calculate_radius_of_curvature()
         left_lane.current_fit = left_fit
+#        left_lane.best_fit = left_lane.best()
+#        if left_lane.best_fit is not None:
+#            left_lane.diffs = left_lane.current_fit - left_lane.best_fit
     
-        
+        right_lane.recent_xfitted = right_lane.ally
         right_lane.allx = rightx
         right_lane.ally = righty
         right_lane.calculate_radius_of_curvature()
         right_lane.current_fit = right_fit
+#        right_lane.best_fit = right_lane.best()
+#        if right_lane.best_fit is not None:
+#            right_lane.diffs = right_lane.current_fit - right_lane.best_fit
         
     else:
-        # current lane lines
-        left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped)
+        # lane lines not detected
+        left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped, display=False)
+        left_lane.recent_xfitted = left_lane.allx
         left_lane.allx = leftx
         left_lane.ally = lefty
         left_lane.calculate_radius_of_curvature()
         left_lane.current_fit = left_fit
+#        left_lane.best_fit = left_lane.best()
+#        if left_lane.best_fit is not None:
+#            left_lane.diffs = left_lane.current_fit - left_lane.best_fit
     
-        
+        right_lane.recent_xfitted = right_lane.ally
         right_lane.allx = rightx
         right_lane.ally = righty
         right_lane.calculate_radius_of_curvature()
         right_lane.current_fit = right_fit
+#        right_lane.best_fit = right_lane.best()
+#        if right_lane.best_fit is not None:
+#            right_lane.diffs = right_lane.current_fit - right_lane.best_fit
 
     # check if detected lines are real-thing
     curv_diff = abs(left_lane.radius_of_curvature - right_lane.radius_of_curvature)
     
     if (curv_diff >40) and (curv_diff<60): # normal curv_diff is around 50m
-        if left_lane.allx.shape[0]>100:    
+        if left_lane.current_fit[2]>300:    
             left_lane.detected=True
         else:
             left_lane.detected=False
             
-        if right_lane.allx.shape[0]>100:
+        if right_lane.current_fit[2]>950:
             right_lane.detected=True
         else:
             right_lane.detected=False
@@ -471,10 +486,15 @@ def process_image(image, left_lane=left_lane, right_lane=right_lane, display=Fal
     
     left_curvature = left_lane.radius_of_curvature
     right_curvature = right_lane.radius_of_curvature
+    vehicle_center = 1280/2
+    x_left  = left_lane.current_fit[0]*720**2 + left_lane.current_fit[1]*720 + left_lane.current_fit[2]
+    x_right  = right_lane.current_fit[0]*720**2 + right_lane.current_fit[1]*720 + right_lane.current_fit[2]
+    lane_center = (x_left + x_right)/2
+    veh_pos = (vehicle_center - lane_center)*3.7/700
     # put text on video
-    cv2.putText(result, 'Left radius of curvature = %.2f m'%(left_curvature),(50,50), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
-    cv2.putText(result, 'Right radius of curvature = %.2f m'%(right_curvature), (50,80), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
-#    cv2.putText(result, 'Vehicle position: %.2f m)
+    cv2.putText(result, 'Left radius of curvature = %.2f (m)'%(left_curvature),(50,50), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(result, 'Right radius of curvature = %.2f (m)'%(right_curvature), (50,80), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(result, 'Vehicle is %.2f (m) left of center'%(veh_pos), (50,110), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
     
     if display==True:
         fig = plt.figure(figsize=(16,9))
@@ -501,15 +521,15 @@ if __name__ == "__main__":
     
     if test_mode == 'image':
         # Test Images
-        image = mpimg.imread('test_images/test3.jpg')
+        image = mpimg.imread('test_images/test6.jpg')
         print("image shape is:", image.shape)
-        result = process_image(image, left_lane=left_lane, right_lane=right_lane, display=True)
+        result = process_image(image, display=True)
 
         
     else:
         # Test Video        
-        project_output = 'project_output.mp4'
-        clip1 = VideoFileClip("project_video.mp4")
+        project_output = 'challenge_video_output.mp4'
+        clip1 = VideoFileClip("challenge_video.mp4")
         project_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
         project_clip.write_videofile(project_output, audio=False)
         print("Complete video output")
