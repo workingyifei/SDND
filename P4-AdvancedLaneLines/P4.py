@@ -56,7 +56,7 @@ def undistort(img, mtx=None, dist=None):
     img_undistort = cv2.undistort(img, mtx, dist, None, mtx)
     return img_undistort
 
-def perspective_transform(image, src_in = None, dst_in = None, display=False):
+def perspective_transform(image, src = None, dst = None, display=False):
     src = np.array([[585., 455.],
                     [710., 455.],
                     [1130., 710.],
@@ -517,19 +517,19 @@ if __name__ == "__main__":
     right_lane = Line(False)
             
 
-    test_mode = 'video'
+    test_mode = 'image'
     
     if test_mode == 'image':
         # Test Images
-        image = mpimg.imread('test_images/test6.jpg')
+        image = mpimg.imread('test_images/shadow1.jpg')
         print("image shape is:", image.shape)
         result = process_image(image, display=True)
 
         
     else:
         # Test Video        
-        project_output = 'challenge_video_output.mp4'
-        clip1 = VideoFileClip("challenge_video.mp4")
+        project_output = 'project_output.mp4'
+        clip1 = VideoFileClip("project_video.mp4")
         project_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
         project_clip.write_videofile(project_output, audio=False)
         print("Complete video output")
