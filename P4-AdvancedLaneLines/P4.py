@@ -137,7 +137,7 @@ def dir_threshold(image, sobel_kernel=15, thresh=(0, np.pi/2)):
     dir_binary = binary_output
     return dir_binary
 
-def color_threshold(image, channel='s'):
+def color_threshold(image, channel='y'):
     # Convert to HLS color space and separate the S channel
     # Note: img is the undistorted image
     hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
@@ -149,8 +149,18 @@ def color_threshold(image, channel='s'):
     h_thresh_max = 255
     l_thresh_min = 170
     l_thresh_max = 255
-    s_thresh_min = 200
+    s_thresh_min = 100
     s_thresh_max = 255
+    
+    r_channel = hls[:,:,0]
+    g_channel = hls[:,:,1]    
+    b_channel = hls[:,:,2]
+    r_thresh_min = 180
+    r_thresh_max = 255
+    g_thresh_min = 170
+    g_thresh_max = 255
+    b_thresh_min = 200
+    b_thresh_max = 255
     
     if channel == 'h':
         # Threshold color channel
@@ -162,29 +172,41 @@ def color_threshold(image, channel='s'):
         l_binary = np.zeros_like(l_channel)
         l_binary[(l_channel >= l_thresh_min) & (l_channel <= l_thresh_max)] = 1
         color_binary = l_binary
-    else:
+    elif channel == 's':
          # Threshold color channel
         s_binary = np.zeros_like(s_channel)
         s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
         color_binary = s_binary
+    elif channel == 'r':
+        # Threshold color channel
+        r_binary = np.zeros_like(r_channel)
+        r_binary[(r_channel >= r_thresh_min) & (r_channel <= r_thresh_max)] = 1
+        color_binary = r_binary
+    elif channel == 'g':
+        # Threshold color channel
+        g_binary = np.zeros_like(g_channel)
+        g_binary[(g_channel >= g_thresh_min) & (g_channel <= g_thresh_max)] = 1
+        color_binary = g_binary
+    else:
+         # Threshold color channel
+        b_binary = np.zeros_like(b_channel)
+        b_binary[(b_channel >= b_thresh_min) & (b_channel <= b_thresh_max)] = 1
+        color_binary = b_binary
     
     return color_binary
 
 def threshold(image):
    # Apply each of the thresholding functions
-    gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=3, thresh=(50, 255))
+    gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=3, thresh=(15, 100))
     # grady = abs_sobel_thresh(image, orient='y', sobel_kernel=3, thresh=(200, 255))
     mag_binary = mag_thresh(image, sobel_kernel=3, mag_thresh=(30, 100))
     dir_binary = dir_threshold(image, sobel_kernel=15, thresh=(0.7, 1,2))
     s_binary = color_threshold(image, channel='s')
+    r_binary = color_threshold(image, channel='r')
+    combined_binary = np.zeros_like(mag_binary)
+    combined_binary[(gradx == 1) | ((s_binary==1) | (r_binary==1)) | ((mag_binary==1)&(dir_binary==1))] = 1
     
-    combined = np.zeros_like(dir_binary)
-    combined[(gradx == 1) | ((mag_binary==1) & (gradx==1))] = 1
-    
-    
-    # Combine the two binary thresholds
-    combined_binary = np.zeros_like(gradx)
-    combined_binary[(s_binary == 1) | (combined == 1)] = 1
+
 
     return combined_binary
 
@@ -362,6 +384,8 @@ class Line():
         self.allx = None  
         #y values for detected line pixels
         self.ally = None
+        
+        self.botx = 200
  
      
 #    def best(self):
@@ -404,7 +428,9 @@ class Line():
 
 
 
+
 def process_image(image, display=False): 
+    
     # undistort image
     image_undistort = undistort(image, mtx=mtx, dist=dist)
     
@@ -413,66 +439,41 @@ def process_image(image, display=False):
     
     # transfer image to a bird eye view
     image_warped, M, Minv = perspective_transform(image_threshold)
+  
     
-    if left_lane.detected==True and right_lane.detected==True:
-        # lane lines detected
-        left_fit, right_fit, leftx, lefty, rightx, righty = skip_sliding_windows(image_warped, left_lane.current_fit, right_lane.current_fit, display=False)
-        left_lane.recent_xfitted = left_lane.allx
-        left_lane.allx = leftx
-        left_lane.ally = lefty
-        left_lane.calculate_radius_of_curvature()
-        left_lane.current_fit = left_fit
-#        left_lane.best_fit = left_lane.best()
-#        if left_lane.best_fit is not None:
-#            left_lane.diffs = left_lane.current_fit - left_lane.best_fit
-    
-        right_lane.recent_xfitted = right_lane.ally
-        right_lane.allx = rightx
-        right_lane.ally = righty
-        right_lane.calculate_radius_of_curvature()
-        right_lane.current_fit = right_fit
-#        right_lane.best_fit = right_lane.best()
-#        if right_lane.best_fit is not None:
-#            right_lane.diffs = right_lane.current_fit - right_lane.best_fit
-        
-    else:
+#    if (left_lane.botx <90):
+#        # lane lines detected
+#        left_fit, right_fit, leftx, lefty, rightx, righty = skip_sliding_windows(image_warped, left_lane.current_fit, right_lane.current_fit, display=False)
+#       
+#        
+#    else:
         # lane lines not detected
-        left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped, display=False)
-        left_lane.recent_xfitted = left_lane.allx
-        left_lane.allx = leftx
-        left_lane.ally = lefty
-        left_lane.calculate_radius_of_curvature()
-        left_lane.current_fit = left_fit
+    left_fit, right_fit, leftx, lefty, rightx, righty = sliding_window(image_warped, display=False)
+    left_lane.recent_xfitted = left_lane.allx
+    left_lane.allx = leftx
+    left_lane.ally = lefty
+    left_lane.calculate_radius_of_curvature()
+    left_lane.current_fit = left_fit
+    left_lane.detected = True
 #        left_lane.best_fit = left_lane.best()
 #        if left_lane.best_fit is not None:
 #            left_lane.diffs = left_lane.current_fit - left_lane.best_fit
-    
-        right_lane.recent_xfitted = right_lane.ally
-        right_lane.allx = rightx
-        right_lane.ally = righty
-        right_lane.calculate_radius_of_curvature()
-        right_lane.current_fit = right_fit
+
+    right_lane.recent_xfitted = right_lane.ally
+    right_lane.allx = rightx
+    right_lane.ally = righty
+    right_lane.calculate_radius_of_curvature()
+    right_lane.current_fit = right_fit
+    right_lane.detected = True
 #        right_lane.best_fit = right_lane.best()
 #        if right_lane.best_fit is not None:
 #            right_lane.diffs = right_lane.current_fit - right_lane.best_fit
 
+    left_lane.botx = left_lane.current_fit[0]*720**2 + left_lane.current_fit[1]*720 + left_lane.current_fit[2]
     # check if detected lines are real-thing
     curv_diff = abs(left_lane.radius_of_curvature - right_lane.radius_of_curvature)
     
-    if (curv_diff >40) and (curv_diff<60): # normal curv_diff is around 50m
-        if left_lane.current_fit[2]>300:    
-            left_lane.detected=True
-        else:
-            left_lane.detected=False
-            
-        if right_lane.current_fit[2]>950:
-            right_lane.detected=True
-        else:
-            right_lane.detected=False
-    else:
-            left_lane.detected=False
-            right_lane.detected=False
-    
+
 
 #    print(abs(left_lane.radius_of_curvature - right_lane.radius_of_curvature))
 #    print(abs(left_lane.current_fit[0] - right_lane.current_fit[0]))
@@ -517,19 +518,21 @@ if __name__ == "__main__":
     right_lane = Line(False)
             
 
-    test_mode = 'image'
+    test_mode = 'movie'
     
     if test_mode == 'image':
-        # Test Images
-        image = mpimg.imread('test_images/shadow1.jpg')
-        print("image shape is:", image.shape)
-        result = process_image(image, display=True)
+        images = glob.glob("./test_images/*.jpg")
+        for each in images:
+            # Test Images
+            image = mpimg.imread(each)
+            print("image shape is:", image.shape)
+            result = process_image(image, display=True)
 
         
     else:
         # Test Video        
         project_output = 'project_output.mp4'
-        clip1 = VideoFileClip("project_video.mp4")
-        project_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
+        clip = VideoFileClip("project_video.mp4")
+        project_clip = clip.fl_image(process_image) #NOTE: this function expects color images!!
         project_clip.write_videofile(project_output, audio=False)
         print("Complete video output")

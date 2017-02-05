@@ -52,7 +52,7 @@ def undistort(img, mtx=None, dist=None):
 ```
 
 ####2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 94 through 189 in `P4.py`).  Here's an example of my output for this step. 
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 94 through 211 in `P4.py`).  Here's an example of my output for this step. 
 
 ![alt text](./writeup_images/threshold.png)
 ![alt text](./writeup_images/threshold1.png)
@@ -60,19 +60,16 @@ I used a combination of color and gradient thresholds to generate a binary image
 ```python
 def threshold(image):
    # Apply each of the thresholding functions
-    gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=3, thresh=(50, 255))
+    gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=3, thresh=(15, 100))
     # grady = abs_sobel_thresh(image, orient='y', sobel_kernel=3, thresh=(200, 255))
     mag_binary = mag_thresh(image, sobel_kernel=3, mag_thresh=(30, 100))
     dir_binary = dir_threshold(image, sobel_kernel=15, thresh=(0.7, 1,2))
     s_binary = color_threshold(image, channel='s')
+    r_binary = color_threshold(image, channel='r')
+    combined_binary = np.zeros_like(mag_binary)
+    combined_binary[(gradx == 1) | ((s_binary==1) | (r_binary==1)) | ((mag_binary==1)&(dir_binary==1))] = 1
     
-    combined = np.zeros_like(dir_binary)
-    combined[(gradx == 1) | ((mag_binary==1) & (gradx==1))] = 1
-    
-    
-    # Combine the two binary thresholds
-    combined_binary = np.zeros_like(gradx)
-    combined_binary[(s_binary == 1) | (combined == 1)] = 1
+
 
     return combined_binary
 ```
@@ -80,8 +77,9 @@ def threshold(image):
 * gradx is obtained by applying sobel on x direction as we want to extract vertical lane lines as much as possible
 * mag_binary is obtained by applying a square root of the sum of the sobel x and sobel y square
 * dir_binary is obtained by applying a direction gradient simply calculated as the arctangent of y-gradient divided by x-gradient
-* S channel was extraded from 3rd channel from an HLS image converted from RGB using opencv cvtColor() metnod
-* all binary images were then combined and various thresholding were applied to extract lane lines as much as possible.
+* S channel was extracted as it is very good at identifying white lines 
+* R channel was extracted as it is very good at identifying yellow lines
+* these binary channels were combined with experimented threshold and that's how i got the final threshoded binary image
 
 
 ####3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
@@ -136,7 +134,7 @@ I implemented this step in lines 314 through 339 in my code in `P4.py` in the fu
 
 ###Pipeline (video)
 
-Here's a [link to my video result](https://youtu.be/QjcXf3By9s4)
+output video is inside the repository ![here](./project_output.mp4)
 
 ---
 
