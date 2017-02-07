@@ -10,6 +10,7 @@ import matplotlib.image as mpimg
 import numpy as np
 import cv2
 from skimage.feature import hog
+import matplotlib.pyplot as plt
 # Define a function to return HOG features and visualization
 def get_hog_features(img, orient, pix_per_cell, cell_per_block, 
                         vis=False, feature_vec=True):
@@ -62,6 +63,7 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
         file_features = []
         # Read in each one by one
         image = mpimg.imread(file)
+        image = (image*255).astype(np.uint8)
         # apply color conversion if other than 'RGB'
         if color_space != 'RGB':
             if color_space == 'HSV':
@@ -125,6 +127,7 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     # Compute the number of windows in x/y
     nx_windows = np.int(xspan/nx_pix_per_step) - 1
     ny_windows = np.int(yspan/ny_pix_per_step) - 1
+#    print("number of windows slided are:", nx_windows * ny_windows)
     # Initialize a list to append window positions to
     window_list = []
     # Loop through finding x and y window positions
@@ -154,3 +157,20 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
         cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
     # Return the image copy with boxes drawn
     return imcopy
+
+#windows = []
+#image = mpimg.imread("./test_images/test3.jpg")
+#windows_top = slide_window(image, x_start_stop=[None, None], y_start_stop=[350, None], 
+#                    xy_window=(64, 64), xy_overlap=(0.5, 0.5))  
+#windows_mid = slide_window(image, x_start_stop=[None, None], y_start_stop=[350, None], 
+#                    xy_window=(96, 96), xy_overlap=(0.5, 0.5))                      
+#windows_mid1 = slide_window(image, x_start_stop=[None, None], y_start_stop=[350, None], 
+#                    xy_window=(128, 128), xy_overlap=(0.5, 0.5))                       
+#                     
+#windows_bot = slide_window(image, x_start_stop=[None, None], y_start_stop=[350, None], 
+#                    xy_window=(160, 160), xy_overlap=(0.5, 0.5))               
+##windows = windows.append(windows_top)        
+#window_img = draw_boxes(image, windows_top, color=(0, 0, 255), thick=6)   
+#window_img = draw_boxes(window_img, windows_bot, color=(0, 0, 255), thick=6)   
+#window_img = draw_boxes(window_img, windows_mid, color=(0, 0, 255), thick=6)   
+#plt.imshow(window_img)
