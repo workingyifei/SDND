@@ -18,6 +18,7 @@ from lesson_functions import *
 from sklearn.preprocessing import StandardScaler
 from sklearn.externals import joblib
 import time
+from collections import deque
 
 
 
@@ -137,71 +138,103 @@ def draw_labeled_bboxes(img, labels):
     # Return the image
     return img
 
+# remove false_positives that has an area less than 5000
+def remove_false_positives(labels):
+    bboxes = []
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+
+        if (bbox[1][0]-bbox[0][0]+1)*(bbox[1][1]-bbox[0][1]+1) > 5000:
+            bboxes.append(bbox)
+    # Return the bounding bounding boses
+    return bboxes
+
+class Vehicle():
+    def __init__(self):
+        self.current_position = []
+        self.previous_position=deque()
+        self.best_position = []
+        
+    
+    def current(self, bboxes):
+        self.current_position = bboxes
+
+    
+    def best(self):
+        best_bboxes = []
+        if len(self.previous_position) < 5:
+            self.previous_position.appendleft(self.current_position)
+            l = list(self.previous_position)
+            self.best_position = np.mean(l, axis=0).astype(int)
+        else:
+            self.previous_position.appendleft(self.current_position)
+            l = list(self.previous_position)
+            self.best_position = np.mean(l, axis=0).astype(int)
+            self.previous_position.pop()
+            
+        for i in range(len(self.best_position)):
+            best_bboxes.append(tuple(map(tuple, self.best_position[i])))
+
+        return best_bboxes
 
 def process(image):
     draw_image = np.copy(image)
-            
-    # top
-    windows_top = slide_window(image, x_start_stop=[650, None], y_start_stop=[350, 500], 
-                        xy_window=(64, 64), xy_overlap=(0.7, 0.7))
-    hot_windows_top = search_windows(image, windows_top, svc, color_space=color_space, 
-                            spatial_size=spatial_size, hist_bins=hist_bins, 
-                            orient=orient, pix_per_cell=pix_per_cell, 
-                            cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                            hist_feat=hist_feat, hog_feat=hog_feat)                       
-    # mid
-    windows_mid = slide_window(image, x_start_stop=[650,None], y_start_stop=[400, 600], 
-                        xy_window=(96, 96), xy_overlap=(0.8, 0.7))
-    hot_windows_mid = search_windows(image, windows_mid, svc, color_space=color_space, 
-                            spatial_size=spatial_size, hist_bins=hist_bins, 
-                            orient=orient, pix_per_cell=pix_per_cell, 
-                            cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                            hist_feat=hist_feat, hog_feat=hog_feat) 
-    
-    # mid1
-    windows_mid1 = slide_window(image, x_start_stop=[650,None], y_start_stop=[410, 600], 
-                        xy_window=(128, 128), xy_overlap=(0.8, 0.7))
-    hot_windows_mid1 = search_windows(image, windows_mid1, svc, color_space=color_space, 
-                            spatial_size=spatial_size, hist_bins=hist_bins, 
-                            orient=orient, pix_per_cell=pix_per_cell, 
-                            cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                            hist_feat=hist_feat, hog_feat=hog_feat) 
-    
-    # bottom
-    windows_bot = slide_window(image, x_start_stop=[650,None], y_start_stop=[500, None], 
-                        xy_window=(160, 160), xy_overlap=(0.5, 0.5))
-    hot_windows_bot = search_windows(image, windows_bot, svc, color_space=color_space, 
-                            spatial_size=spatial_size, hist_bins=hist_bins, 
-                            orient=orient, pix_per_cell=pix_per_cell, 
-                            cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                            hist_feat=hist_feat, hog_feat=hog_feat) 
-    
-    
 
-    window_img = draw_boxes(draw_image, hot_windows_top, color=(0, 0, 255), thick=6)   
-    window_img = draw_boxes(window_img, hot_windows_mid, color=(0, 0, 255), thick=6) 
-    window_img = draw_boxes(window_img, hot_windows_mid1, color=(0, 0, 255), thick=6) 
-    window_img = draw_boxes(window_img, hot_windows_bot, color=(0, 0, 255), thick=6) 
+    # Uncomment the following line if you extracted training
+    # data from .png images (scaled 0 to 1 by mpimg) and the
+    # image you are searching is a .jpg (scaled 0 to 255)
+#            image = image.astype(np.float32)/255
+
+    draw_image = np.copy(image)
     
-    heatmap = np.zeros((image.shape[0], image.shape[1]), np.uint8)
-    heatmap = add_heat(heatmap, hot_windows_mid)
-    heatmap = add_heat(heatmap, hot_windows_top)
-    heatmap = add_heat(heatmap, hot_windows_bot)
+#    pyramid = [((64,64), [650, None], [400, 500], (0.7, 0.7)), 
+#               ((96,96), [650, None], [400, 500], (0.8, 0.8)), 
+#               ((128,128), [650, None], [450, 600], (0.8, 0.8)), 
+#               ((160, 160), [650, None], [550, None], (0.6, 0.6))]
+    
+    heatmap = np.zeros((image.shape[0], image.shape[1]), np.uint8)            
+    
+    for each in pyramid:
+        windows = slide_window(image, x_start_stop=each[1], y_start_stop=each[2], 
+                        xy_window=each[0], xy_overlap=each[3])
+        hot_windows = search_windows(image, windows, svc, color_space=color_space, 
+                            spatial_size=spatial_size, hist_bins=hist_bins, 
+                            orient=orient, pix_per_cell=pix_per_cell, 
+                            cell_per_block=cell_per_block, 
+                            hog_channel=hog_channel, spatial_feat=spatial_feat, 
+                            hist_feat=hist_feat, hog_feat=hog_feat)
+#        draw_image = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)  
+        heatmap = add_heat(heatmap, hot_windows)
+   
     heatmap = apply_threshold(heatmap,2)   
-    labels = label(heatmap)
+    labels = label(heatmap)   
+    # remove false positives
+    new_bboxes = remove_false_positives(labels)
+    # average car bounding boxes of current and last 5 frames
+    car.current(new_bboxes)
+    best_bboxes = car.best()
+
+    final_result = draw_boxes(draw_image, best_bboxes)
+    return final_result
     
-    final_img = draw_labeled_bboxes(np.copy(image), labels)                    
+    
+    
+#    final_img = draw_labeled_bboxes(np.copy(image), labels)    
+                
     return final_img
 
 
 if __name__ == "__main__":  
     
     # load model
-    filename = "./model_yuv_982all.pkl"
+    filename = "./models/model_yuv_982all.pkl"
     svc = joblib.load(filename)
 
     color_space = 'YUV' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
@@ -215,8 +248,13 @@ if __name__ == "__main__":
     hist_feat = True # Histogram features on or off
     hog_feat = True # HOG features on or off
 
+    global pyramid
+    pyramid = [((64,64), [650, None], [400, 500], (0.8, 0.8)), 
+                       ((96,96), [650, None], [500, 600], (0.7, 0.7)), 
+                       ((128,128), [650, None], [500, 650], (0.8, 0.8)), 
+                       ((160, 160), [650, None], [550, None], (0.6, 0.6))]
     
-    test_mode = 'movie'
+    test_mode = 'video'
     
     if test_mode == 'image':
         images = glob.glob("./test_images/test*.jpg")
@@ -234,71 +272,38 @@ if __name__ == "__main__":
             print("test image shape is:", image.shape)
             draw_image = np.copy(image)
             
-            # top
-            windows_top = slide_window(image, x_start_stop=[650, None], y_start_stop=[350, 500], 
-                                xy_window=(64, 64), xy_overlap=(0.7, 0.7))
-            hot_windows_top = search_windows(image, windows_top, svc, color_space=color_space, 
+            heatmap = np.zeros((image.shape[0], image.shape[1]), np.uint8)            
+            
+            for each in pyramid:
+                windows = slide_window(image, x_start_stop=each[1], y_start_stop=each[2], 
+                                xy_window=each[0], xy_overlap=each[3])
+                hot_windows = search_windows(image, windows, svc, color_space=color_space, 
                                     spatial_size=spatial_size, hist_bins=hist_bins, 
                                     orient=orient, pix_per_cell=pix_per_cell, 
                                     cell_per_block=cell_per_block, 
                                     hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                                    hist_feat=hist_feat, hog_feat=hog_feat)                       
-            # mid
-            windows_mid = slide_window(image, x_start_stop=[650,None], y_start_stop=[400, 600], 
-                                xy_window=(96, 96), xy_overlap=(0.8, 0.7))
-            hot_windows_mid = search_windows(image, windows_mid, svc, color_space=color_space, 
-                                    spatial_size=spatial_size, hist_bins=hist_bins, 
-                                    orient=orient, pix_per_cell=pix_per_cell, 
-                                    cell_per_block=cell_per_block, 
-                                    hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                                    hist_feat=hist_feat, hog_feat=hog_feat) 
-            
-            # mid1
-            windows_mid1 = slide_window(image, x_start_stop=[650,None], y_start_stop=[410, 600], 
-                                xy_window=(128, 128), xy_overlap=(0.8, 0.7))
-            hot_windows_mid1 = search_windows(image, windows_mid1, svc, color_space=color_space, 
-                                    spatial_size=spatial_size, hist_bins=hist_bins, 
-                                    orient=orient, pix_per_cell=pix_per_cell, 
-                                    cell_per_block=cell_per_block, 
-                                    hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                                    hist_feat=hist_feat, hog_feat=hog_feat) 
-            
-            # bottom
-            windows_bot = slide_window(image, x_start_stop=[650,None], y_start_stop=[500, None], 
-                                xy_window=(160, 160), xy_overlap=(0.5, 0.5))
-            hot_windows_bot = search_windows(image, windows_bot, svc, color_space=color_space, 
-                                    spatial_size=spatial_size, hist_bins=hist_bins, 
-                                    orient=orient, pix_per_cell=pix_per_cell, 
-                                    cell_per_block=cell_per_block, 
-                                    hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                                    hist_feat=hist_feat, hog_feat=hog_feat) 
-            
-
-            window_img = draw_boxes(draw_image, hot_windows_top, color=(0, 0, 255), thick=6)   
-            window_img = draw_boxes(window_img, hot_windows_mid, color=(0, 0, 255), thick=6) 
-            window_img = draw_boxes(window_img, hot_windows_mid1, color=(0, 0, 255), thick=6) 
-            window_img = draw_boxes(window_img, hot_windows_bot, color=(0, 0, 255), thick=6) 
-            
-            heatmap = np.zeros((image.shape[0], image.shape[1]), np.uint8)
-            heatmap = add_heat(heatmap, hot_windows_mid)
-            heatmap = add_heat(heatmap, hot_windows_top)
-            heatmap = add_heat(heatmap, hot_windows_bot)
+                                    hist_feat=hist_feat, hog_feat=hog_feat)
+                draw_image = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)  
+                heatmap = add_heat(heatmap, hot_windows)
+       
             heatmap = apply_threshold(heatmap,2)   
             labels = label(heatmap)
             time2 = time.time()
-            print(labels[1], "car found in", round(time2-time1,4), "seconds")
+            print(labels[1], "car found in", round(time2-time1,2), "seconds")
             
             final_img = draw_labeled_bboxes(np.copy(image), labels)
             
             fig = plt.figure(figsize=(16,9))
-            fig.add_subplot(221), plt.imshow(window_img)                    
+            fig.add_subplot(221), plt.imshow(draw_image)                    
             fig.add_subplot(222), plt.imshow(heatmap, cmap='hot')
             fig.add_subplot(223), plt.imshow(labels[0], cmap='gray')
             fig.add_subplot(224), plt.imshow(final_img)
     else:
+        # initialize an instance
+        car = Vehicle()
         # Test Video        
-        project_output = 'test_video_yuv982all.mp4'
-        clip = VideoFileClip("project_video.mp4").subclip(25, 42)
+        project_output = 'test_output.mp4'
+        clip = VideoFileClip("test_video.mp4")
         project_clip = clip.fl_image(process) #NOTE: this function expects color images!!
         project_clip.write_videofile(project_output, audio=False)
         print("Complete video output")
