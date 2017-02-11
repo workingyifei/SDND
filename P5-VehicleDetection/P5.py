@@ -151,7 +151,7 @@ def remove_false_positives(labels):
         # Define a bounding box based on min/max x and y
         bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
 
-        if (bbox[1][0]-bbox[0][0]+1)*(bbox[1][1]-bbox[0][1]+1) > 5000:
+        if (bbox[1][0]-bbox[0][0]+1)*(bbox[1][1]-bbox[0][1]+1) > 4000 and (bbox[1][0]-bbox[0][0]+1)*(bbox[1][1]-bbox[0][1]+1) < 40000:
             bboxes.append(bbox)
     # Return the bounding bounding boses
     return bboxes
@@ -169,26 +169,69 @@ class Vehicle():
 
     
     def best(self):
-        best_bboxes = []
-        if self.current_position == []:
-            best_bboxes = []
-        elif len(self.previous_position) < 5:
-            self.previous_position.appendleft(self.current_position)
-            l = list(self.previous_position)
-            self.best_position = np.mean(l, axis=0).astype(int)
-        else:
-            self.previous_position.appendleft(self.current_position)
-            l = list(self.previous_position)
-            self.best_position = np.mean(l, axis=0).astype(int)
-            self.previous_position.pop()
+        # Method 1:
+        # Calculate the average of last 5 frames
+#        best_bboxes = []
+#        if self.current_position == []:
+#            best_bboxes = []
+#        elif len(self.previous_position) < 5:
+#            self.previous_position.appendleft(self.current_position)
+#            l = list(self.previous_position)
+#            self.best_position = np.mean(l, axis=0).astype(int)
+#        else:
+#            self.previous_position.appendleft(self.current_position)
+#            l = list(self.previous_position)
+#            self.best_position = np.mean(l, axis=0).astype(int)
+#            self.previous_position.pop()
+#            
+#        for i in range(len(self.best_position)):
+#            best_bboxes.append(tuple(map(tuple, self.best_position[i])))
             
-        for i in range(len(self.best_position)):
-            best_bboxes.append(tuple(map(tuple, self.best_position[i])))
-
-        return best_bboxes
+        
+        # Method 2:
+        # Heatmaps thresholding
+         if self.current_position == []:
+             best_bboxes = []
+             self.best_position = best_bboxes
+             
+         elif len(self.previous_position) <5:
+             heatmap = np.zeros((720, 1280), np.uint8)  
+             for each in self.current_position:
+                 self.previous_position.appendleft(each)
+            
+             l = list(self.previous_position)
+             add_heat(heatmap, l)
+             apply_threshold(heatmap, 3)
+             labels = label(heatmap)
+             best_bboxes = remove_false_positives(labels)
+             self.best_position = best_bboxes
+             
+         else:
+             heatmap = np.zeros((720, 1280), np.uint8)  
+             for each in self.current_position:
+                 self.previous_position.appendleft(each)
+             l = list(self.previous_position)
+             self.previous_position.pop()
+             add_heat(heatmap, l)
+             apply_threshold(heatmap, 5)  
+             labels = label(heatmap)
+             best_bboxes = remove_false_positives(labels) 
+             self.best_position = best_bboxes
+             
+             if len(best_bboxes)==1:
+                 if (best_bboxes[0][1][0]-best_bboxes[0][0][0]+1)*(best_bboxes[0][1][1]-best_bboxes[0][0][1]+1) > 40000:
+                     self.previous_position = deque()
+                     self.best_position = []
+             elif len(best_bboxes)==2:
+                 if (best_bboxes[0][1][0]-best_bboxes[0][0][0]+1)*(best_bboxes[0][1][1]-best_bboxes[0][0][1]+1) > 30000 or (best_bboxes[1][1][0]-best_bboxes[1][0][0]+1)*(best_bboxes[1][1][1]-best_bboxes[1][0][1]+1) > 30000:
+                     self.previous_position = deque()
+                     self.best_position = []
+                 
+             else:
+                 return self.best_position
+         return self.best_position
 
 def process(image):
-    draw_image = np.copy(image)
 
     # Uncomment the following line if you extracted training
     # data from .png images (scaled 0 to 1 by mpimg) and the
@@ -216,40 +259,49 @@ def process(image):
     # remove false positives
     new_bboxes = remove_false_positives(labels)
     
-  
     
     
-    
+    # Method 2
+    # Heatmap thresholding
     number_of_cars = len(new_bboxes)
-    
-    if number_of_cars < 2:
-        # average car bounding boxes of current and last 5 frames
+    if number_of_cars < 3:
         car1.current(new_bboxes)
-        best_bboxes = car1.best()
-        final_result = draw_boxes(draw_image, best_bboxes)
+        car1.best()
+        final_result = draw_boxes(draw_image, car1.best_position)
         
-    elif number_of_cars ==2:
-        # average car bounding boxes of current and last 5 frames
-        car2.current(new_bboxes)
-        best_bboxes = car2.best()
-        final_result = draw_boxes(draw_image, best_bboxes)
-#
-#    elif number_of_cars <4:
-#        
-#        car1.current(np.array(new_bboxes[1]))
-#        car2.current(np.array(new_bboxes[0]))
-#        final_result = draw_boxes(draw_image, car1.best())
-#        final_result = draw_boxes(final_result, car2.best())
     else:
-        final_result = draw_image
+        final_result = draw_boxes(draw_image, car1.best_position)
+    
+#    # Method 1
+#    # Calculate the average of last 5 frames 
+#    number_of_cars = len(new_bboxes)
+#    
+#    if number_of_cars < 2:
+#        # average car bounding boxes of current and last 5 frames
+#        car1.current(new_bboxes)
+#        best_bboxes = car1.best()
+#        final_result = draw_boxes(draw_image, best_bboxes)
+#        
+#    elif number_of_cars ==2:
+#        # average car bounding boxes of current and last 5 frames
+#        car2.current(new_bboxes)
+#        best_bboxes = car2.best()
+#        final_result = draw_boxes(draw_image, best_bboxes)
+##
+##    elif number_of_cars <4:
+##        
+##        car1.current(np.array(new_bboxes[1]))
+##        car2.current(np.array(new_bboxes[0]))
+##        final_result = draw_boxes(draw_image, car1.best())
+##        final_result = draw_boxes(final_result, car2.best())
+#    else:
+#        final_result = draw_image
+#  
+    
+    
+    
     return final_result
     
-    
-    
-#    final_img = draw_labeled_bboxes(np.copy(image), labels)    
-                
-#    return final_img
-
 
 if __name__ == "__main__":  
     
