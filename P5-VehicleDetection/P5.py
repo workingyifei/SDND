@@ -161,6 +161,7 @@ class Vehicle():
         self.current_position = []
         self.previous_position=deque()
         self.best_position = []
+        self.number = 0
         
     
     def current(self, bboxes):
@@ -169,7 +170,9 @@ class Vehicle():
     
     def best(self):
         best_bboxes = []
-        if len(self.previous_position) < 5:
+        if self.current_position == []:
+            best_bboxes = []
+        elif len(self.previous_position) < 5:
             self.previous_position.appendleft(self.current_position)
             l = list(self.previous_position)
             self.best_position = np.mean(l, axis=0).astype(int)
@@ -194,11 +197,6 @@ def process(image):
 
     draw_image = np.copy(image)
     
-#    pyramid = [((64,64), [650, None], [400, 500], (0.7, 0.7)), 
-#               ((96,96), [650, None], [400, 500], (0.8, 0.8)), 
-#               ((128,128), [650, None], [450, 600], (0.8, 0.8)), 
-#               ((160, 160), [650, None], [550, None], (0.6, 0.6))]
-    
     heatmap = np.zeros((image.shape[0], image.shape[1]), np.uint8)            
     
     for each in pyramid:
@@ -214,21 +212,43 @@ def process(image):
         heatmap = add_heat(heatmap, hot_windows)
    
     heatmap = apply_threshold(heatmap,2)   
-    labels = label(heatmap)   
+    labels = label(heatmap)  
     # remove false positives
     new_bboxes = remove_false_positives(labels)
-    # average car bounding boxes of current and last 5 frames
-    car.current(new_bboxes)
-    best_bboxes = car.best()
-
-    final_result = draw_boxes(draw_image, best_bboxes)
+    
+  
+    
+    
+    
+    number_of_cars = len(new_bboxes)
+    
+    if number_of_cars < 2:
+        # average car bounding boxes of current and last 5 frames
+        car1.current(new_bboxes)
+        best_bboxes = car1.best()
+        final_result = draw_boxes(draw_image, best_bboxes)
+        
+    elif number_of_cars ==2:
+        # average car bounding boxes of current and last 5 frames
+        car2.current(new_bboxes)
+        best_bboxes = car2.best()
+        final_result = draw_boxes(draw_image, best_bboxes)
+#
+#    elif number_of_cars <4:
+#        
+#        car1.current(np.array(new_bboxes[1]))
+#        car2.current(np.array(new_bboxes[0]))
+#        final_result = draw_boxes(draw_image, car1.best())
+#        final_result = draw_boxes(final_result, car2.best())
+    else:
+        final_result = draw_image
     return final_result
     
     
     
 #    final_img = draw_labeled_bboxes(np.copy(image), labels)    
                 
-    return final_img
+#    return final_img
 
 
 if __name__ == "__main__":  
@@ -300,10 +320,11 @@ if __name__ == "__main__":
             fig.add_subplot(224), plt.imshow(final_img)
     else:
         # initialize an instance
-        car = Vehicle()
+        car1 = Vehicle()
+        car2 = Vehicle()
         # Test Video        
-        project_output = 'test_output.mp4'
-        clip = VideoFileClip("test_video.mp4")
+        project_output = 'project_output.mp4'
+        clip = VideoFileClip("project_video.mp4")
         project_clip = clip.fl_image(process) #NOTE: this function expects color images!!
         project_clip.write_videofile(project_output, audio=False)
         print("Complete video output")
